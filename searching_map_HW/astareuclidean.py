@@ -14,8 +14,9 @@ difficulty = ""  # a string reference to the original import file
 G = 0
 E = 0
 e_list = []
+
 '''
-These variables determine display coler, and can be changed by you, I guess
+These variables determine display color
 '''
 NEON_GREEN = (0, 255, 0)
 PURPLE = (85, 26, 139)
@@ -33,13 +34,17 @@ open = Queue.PriorityQueue()
 came_from = {}
 cost_so_far = {}
 
+def heuristic_euclidean(a, b):
+    """
+    Euclidean distance heuristic for A*.
+    """
+    return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+
 def search(map):
     """
-    This function is meant to use the global variables [start, end, path, expanded, frontier] to search through the
-    provided map.
+    A* search using Euclidean heuristic.
     :param map: A '1-concept' PIL PixelAccess object to be searched. (basically a 2d boolean array)
     """
-
     global path, expanded, frontier, came_from, cost_so_far, difficulty
 
     # Get image size from the loaded map file
@@ -52,16 +57,16 @@ def search(map):
     came_from.clear()
     cost_so_far.clear()
 
-    # Initialize Dijkstra structures
+    # Local priority queue for A*
     pq = Queue.PriorityQueue()
-    pq.put((0, start))   # (cost, node)
+    pq.put((0, start))   # (priority, node)
 
     came_from[start] = None
     cost_so_far[start] = 0
 
     while not pq.empty():
 
-        current_cost, current = pq.get()
+        current_priority, current = pq.get()
 
         # Skip if already expanded
         if current in expanded:
@@ -82,8 +87,8 @@ def search(map):
             (current[0], current[1] - 1)
         ]
 
-        for next_node in neighbors:
-            x, y = next_node
+        for neighbor in neighbors:
+            x, y = neighbor
 
             # Bounds check
             if x < 0 or x >= width or y < 0 or y >= height:
@@ -93,15 +98,21 @@ def search(map):
             if map[x, y] == 0:
                 continue
 
-            # Uniform step cost
+            # g(n)
             new_cost = cost_so_far[current] + 1
 
             # Relaxation step
-            if next_node not in cost_so_far or new_cost < cost_so_far[next_node]:
-                cost_so_far[next_node] = new_cost
-                came_from[next_node] = current
-                frontier[next_node] = True
-                pq.put((new_cost, next_node))
+            if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
+                cost_so_far[neighbor] = new_cost
+                came_from[neighbor] = current
+                frontier[neighbor] = True
+
+                # h(n)
+                h = heuristic_euclidean(neighbor, end)
+
+                # f(n) = g(n) + h(n)
+                priority = new_cost + h
+                pq.put((priority, neighbor))
 
     # Reconstruct shortest path if goal was reached
     if end in came_from:
@@ -126,27 +137,23 @@ def visualize_search(save_file="do_not_save.png"):
     im = Image.open(difficulty).convert("RGB")
     pixel_access = im.load()
 
-    # draw start and end pixels
-    pixel_access[start[0], start[1]] = NEON_GREEN
-    pixel_access[end[0], end[1]] = NEON_GREEN
-
-
-
-    # draw frontier pixels
-    for pixel in frontier.keys():
-        pixel_access[pixel[0], pixel[1]] = LIGHT_GRAY
-
-    # draw expanded pixels
+    # Draw expanded first
     for pixel in expanded.keys():
         pixel_access[pixel[0], pixel[1]] = DARK_GRAY
 
-    # draw path pixels
+    # Draw frontier next
+    for pixel in frontier.keys():
+        pixel_access[pixel[0], pixel[1]] = LIGHT_GRAY
+
+    # Draw path on top
     for pixel in path:
         pixel_access[pixel[0], pixel[1]] = PURPLE
 
+    # Draw start and end last so they stay visible
+    pixel_access[start[0], start[1]] = NEON_GREEN
+    pixel_access[end[0], end[1]] = NEON_GREEN
 
-
-    # display and (maybe) save results
+    # Display and (maybe) save results
     im.show()
     if (save_file != "do_not_save.png"):
         im.save(save_file)
@@ -154,11 +161,6 @@ def visualize_search(save_file="do_not_save.png"):
     im.close()
 
 if __name__ == "__main__":
-    # Throw Errors && Such
-    # global difficulty, start, end
-    # assert sys.version_info[0] == 2  # require python 2 (instead of python 3)
-    # assert len(sys.argv) == 2, "Incorrect Number of arguments"  # require difficulty input
-
     # Parse input arguments
     function_name = str(sys.argv[0])
     difficulty = str(sys.argv[1])
@@ -185,13 +187,9 @@ if __name__ == "__main__":
         end = (599, 350)
     else:
         assert False, "Incorrect difficulty level provided"
-    G = 1000000000000000000
-    E = 1000000000000000000
-    open.put((start, 0))
-    came_from[start] = None
-    cost_so_far[start] = 0
+
     # Perform search on given image
     im = Image.open(difficulty)
     im = im.convert('1')
     search(im.load())
-    visualize_search(difficulty.replace(".gif", "_results.png"))
+    visualize_search(difficulty.replace(".gif", "_astar_euclidean.png"))
